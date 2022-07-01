@@ -1,0 +1,2 @@
+POSTS_AMOUNT: int = 10
+LEN_STR: int = 15

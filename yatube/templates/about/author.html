@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}  
+  Об авторе проекта
+{% endblock %}
+{% block content %}
+{% load static %}
+<div class="row">
+  <div class="col-md-6 mb-3 mt-1">
+    <div class="card">
+      <div class="card-body">
+        <div class="h3 text center">
+          Об авторе проекта
+        </div>
+      </div> 
+    </div>
+  </div> 
+</div>
+<div class="col-md-6">
+  <div class="card-body">
+    <div class="card-text text center">
+      <h3>Привет, меня зовут Алексей Воеводин и я автор этого проекта!</h3>
+    <div>
+      <p>
+        Я понемногу пытаюсь разобраться как устроено и програмированние. 
+        Этот раздел буду дополнять при каждом новом commit'e
+      </p>
+      <i>
+        Специально об этом пишу, чтобы иметь дополнительную мотивацию
+      </i>
+      <img src="{% static '/media/photo_author.jpg' %}"  width="300">
+      <p>
+        Мои контакты:
+      </p>
+      <p> <a href="https://github.com/voevoda173"><img class="icon" width="32" height="32" 
+        src="{% static '/media/git_hub_icon.png' %}"> Я на гитхабе </a></p>
+      </div> 
+    </div>
+  </div>
+</div>  
+{% endblock %} 
