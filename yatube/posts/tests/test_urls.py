@@ -33,7 +33,7 @@ class PostURLTests(TestCase):
         """Проверка страниц, доступных любому пользователю."""
         urls = {
             '/': HTTPStatus.OK,
-            '/group/test-slug/': HTTPStatus.OK,
+            f'/group/{self.group.slug}/': HTTPStatus.OK,
             f'/profile/{self.user_author.username}/': HTTPStatus.OK,
             f'/posts/{self.post.id}/': HTTPStatus.OK,
             f'/posts/{self.post.id}/comment/': HTTPStatus.FOUND,
@@ -78,8 +78,8 @@ class PostURLTests(TestCase):
 
     def test_create_or_edit_url_redirect_anonymus_on_login(self):
         """Проверка редиректа анонимного пользователя
-        при попытке создания, редактирования поста или
-        комментирования поста."""
+        при попытке создания, редактирования поста,
+        комментирования поста и подписки на автора."""
         urls = {
             '/create/': '/auth/login/?next=/create/',
             f'/posts/{self.post.id}/edit/':
@@ -96,8 +96,8 @@ class PostURLTests(TestCase):
         """URL-адрес использует соответствующий шаблон."""
         templates_urls_names = {
             '/': 'posts/index.html',
-            '/group/test-slug/': 'posts/group_list.html',
-            '/profile/TestAuthor/': 'posts/profile.html',
+            f'/group/{self.group.slug}/': 'posts/group_list.html',
+            f'/profile/{self.post.author.username}/': 'posts/profile.html',
             f'/posts/{self.post.id}/': 'posts/post_detail.html',
             f'/posts/{self.post.id}/edit/': 'posts/create_post.html',
             '/create/': 'posts/create_post.html',
@@ -118,13 +118,13 @@ class PostURLTests(TestCase):
                                   author=self.user_author)
         )
 
-    def test_urk_unfollow_exist_and_desired_auth(self):
+    def test_url_unfollow_exist_and_desired_auth(self):
         """Проверка, что авторизованный пользователь может
         отписываться от других пользователей."""
         self.authorized_client.get(
-            f'/profile/{self.user_author.username}/unfollow/'
+            f'/profile/{self.post.author.username}/unfollow/'
         )
         self.assertFalse(
             Follow.objects.filter(user=self.user,
-                                  author=self.user_author)
+                                  author=self.user_author).exists()
         )

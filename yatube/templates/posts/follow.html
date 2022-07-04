@@ -2,22 +2,22 @@
 {% extends 'base.html' %}
 {% load cache %}
 {% block title %}
-Ваша лента
+  Ваша лента
 {% endblock %}
 {% block content %}
-    {% include 'posts/includes/switcher.html' %}
-    <div class="container py-5">
-      <h1>
-        Ваша лента
-      </h1>
-      {% cache 20 index_page page_obj %}
-      {% for post in page_obj %}
-        {% include 'posts/includes/post.html' %}
-        {% if not forloop.last %} 
-        <hr>
-        {% endif %}
-      {% endfor %}
-      {% endcache %}
-    </div>
-  {% include 'posts/includes/paginator.html' %}
+{% include 'posts/includes/switcher.html' %}
+  <div class="container py-5">
+    <h1>
+      Ваша лента
+    </h1>
+    {% cache 20 index_page page_obj %}
+    {% for post in page_obj %}
+      {% include 'posts/includes/post.html' %}
+      {% if not forloop.last %} 
+      <hr>
+      {% endif %}
+    {% endfor %}
+    {% endcache %}
+  </div> <!--class="container py-5"-->>
+{% include 'posts/includes/paginator.html' %}
 {% endblock %}

@@ -2,6 +2,7 @@ import shutil
 import tempfile
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
@@ -59,23 +60,48 @@ class PostFormTests(TestCase):
 
     def test_authorized_user_create_post(self):
         """Проверка создания записи авторизированным клиентом."""
+        image = (
+            b'\x47\x49\x46\x38\x39\x61\x02\x00'
+            b'\x01\x00\x80\x00\x00\x00\x00\x00'
+            b'\xFF\xFF\xFF\x21\xF9\x04\x00\x00'
+            b'\x00\x00\x00\x2C\x00\x00\x00\x00'
+            b'\x02\x00\x01\x00\x00\x02\x02\x0C'
+            b'\x0A\x00\x3B'
+        )
+
+        uploaded = SimpleUploadedFile(
+            name='image_for_create.jpg',
+            content=image,
+            content_type='image/jpg'
+        )
         post_count = Post.objects.count()
         form_data = {
             'text': 'Новый пост',
-            'image': self.image
+            'group': self.group.id,
+            'image': uploaded,
         }
         self.authorized_client.post(
             reverse('posts:post_create'),
             data=form_data,
             follow=True,
         )
+        cache.clear()
         self.assertEqual(Post.objects.count(), post_count + 1)
+        first_object = self.authorized_client.get(reverse('posts:index'))
+        self.assertEqual(
+            first_object.context['page_obj'][0].text, form_data['text'])
+        self.assertEqual(
+            first_object.context['page_obj'][0].group.slug, self.group.slug)
+        self.assertEqual(
+            first_object.context['page_obj'][0].author.id, self.user.id)
+        self.assertEqual(
+            first_object.context['page_obj'][0].image.name,
+            f'posts/{uploaded.name}')
         self.assertTrue(
             Post.objects.filter(
                 text=form_data['text'],
                 author=self.user,
-            ).exists()
-        )
+            ).exists())
 
     def test_author_user_edit_post(self):
         """Проверка изменения поста при его редактировании автором."""
@@ -106,6 +132,14 @@ class PostFormTests(TestCase):
             follow=True,
         )
         self.assertEqual(Comment.objects.count(), comment_count + 1)
+        object_detail = self.authorized_client.get(
+            reverse('posts:post_detail', args=(self.post.id,)))
+        self.assertEqual(
+            object_detail.context['comments'][0].text, comment)
+        self.assertEqual(
+            object_detail.context['comments'][0].post.id, self.post.id)
+        self.assertEqual(
+            object_detail.context['comments'][0].author.id, self.user.id)
         self.assertTrue(
             Comment.objects.filter(
                 post=self.post,

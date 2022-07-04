@@ -1,0 +1,12 @@
+<h4>
+  Все посты пользователя: {{ post.author.get_full_name }}
+</h4>
+<h4>
+  Всего постов: {{ post.author.posts.count }}
+</h4>  
+<h4>
+  Подписчиков: {{ post.author.following.count }}
+</h4>
+<h4>
+  Подписан: {{ post.author.follower.count }}
+</h4>

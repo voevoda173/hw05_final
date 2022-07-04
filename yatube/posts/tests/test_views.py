@@ -1,3 +1,4 @@
+
 import shutil
 import tempfile
 
@@ -9,7 +10,7 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from ..constants import POSTS_AMOUNT
-from ..models import Group, Post, User
+from ..models import Comment, Follow, Group, Post, User
 
 TEMP_MEDIA_ROOT = tempfile.mkdtemp(dir=settings.BASE_DIR)
 
@@ -50,6 +51,7 @@ class PostPagesTest(TestCase):
         ]
         Post.objects.bulk_create(cls.posts)
         cls.posts = Post.objects.select_related('author', 'group')
+        cache.clear()
 
     @classmethod
     def tearDownClass(cls):
@@ -93,7 +95,7 @@ class PostPagesTest(TestCase):
             first_object.text: self.posts[0].text,
             first_object.author.id: self.posts[0].author.id,
             first_object.group.slug: self.posts[0].group.slug,
-            first_object.image: self.posts[0].image,
+            first_object.image.name: self.posts[0].image.name,
         }
         for response_name, reverse_name in context_objects.items():
             with self.subTest(reverse_name=reverse_name):
@@ -116,6 +118,12 @@ class PostPagesTest(TestCase):
         response = (self.author_client.get(reverse('posts:profile',
                     kwargs={'username': self.user_author.username})))
         self.assertEqual(response.context['author'], self.user_author)
+        self.assertFalse(response.context['following'])
+        self.authorized_client.get(reverse('posts:profile_follow',
+                                   args=(self.user_author.username,)))
+        response = (self.authorized_client.get(reverse('posts:profile',
+                    kwargs={'username': self.user_author.username})))
+        self.assertTrue(response.context['following'])
         self.check_pages_show_correct_context(response)
 
     def test_post_detail_show_correct_context(self):
@@ -126,6 +134,20 @@ class PostPagesTest(TestCase):
                          self.posts[0].id)
         self.assertEqual(response.context['post'].image,
                          self.posts[0].image)
+        self.assertEqual(response.context['post'].group,
+                         self.posts[0].group)
+        self.assertEqual(response.context['post'].text,
+                         self.posts[0].text)
+        self.assertTrue(response.context['form'])
+        comment = Comment.objects.create(
+            post=self.posts[0],
+            author=self.user,
+            text='Тестовый комментарий',
+        )
+        response_comment = self.authorized_client.get(
+            reverse('posts:post_detail', kwargs={'post_id': self.posts[0].id}))
+        self.assertEqual(
+            response_comment.context['comments'][0].text, comment.text)
 
     def test_create_post_show_correct_context(self):
         """Шаблон create_post сформирован с правильным контекстом."""
@@ -264,11 +286,7 @@ class TestViewFollow(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.author = User.objects.create_user(username='TestAuthor')
-        cls.post = Post.objects.create(
-            text='TestTextForFollwer',
-            author=cls.author,
-        )
+        cls.author = User.objects.create_user(username='NewAuthor')
 
     def setUp(self):
         self.follower = User.objects.create_user(username='Follower')
@@ -281,23 +299,100 @@ class TestViewFollow(TestCase):
         self.author_client.force_login(self.author)
 
     def test_follow_index_page(self):
-        """Проверка, что в ленте подписчика отображаются
-        посты автора, на которого он подписан и не
-        отображаются в ленте пользователя,
-        который не подписан на автора."""
+        """Проверка, что авторизованный пользователь может подписаться
+        на автора и в его ленте отображаются посты автора,
+        на которого он подписан."""
+        self.follower_client.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.author.username}))
+        post = Post.objects.create(
+            text='Тест для подписки',
+            author=self.author,
+        )
+        response = self.follower_client.get(reverse('posts:follow_index'))
+        self.assertEqual(response.context['page_obj'][0].id, post.id)
+        self.assertEqual(response.context['page_obj'][0].text, post.text)
+        self.assertEqual(response.context['page_obj'][0].group, post.group)
+
+    def test_follower_can_unfollow(self):
+        """проверка, что подписчик может отписаться
+        от автора."""
+        Post.objects.create(
+            text='Тест для подписки',
+            author=self.author,
+        )
         self.follower_client.get(
             reverse('posts:profile_follow',
                     kwargs={'username': self.author.username}))
         response = self.follower_client.get(reverse('posts:follow_index'))
         self.assertEqual(len(response.context['page_obj']), 1)
-        response = self.authorized_client.get(reverse('posts:follow_index'))
+        self.follower_client.get(
+            reverse('posts:profile_unfollow',
+                    kwargs={'username': self.author.username}))
+        response = self.follower_client.get(reverse('posts:follow_index'))
         self.assertEqual(len(response.context['page_obj']), 0)
+
+    def test_anonymous_client_cant_follow(self):
+        """Проверка, что неавторизованный пользователь
+        не может подписаться на автора."""
+        count_followers = Follow.objects.count()
+        self.client.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.author.username}))
+        self.assertEqual(Follow.objects.count(), count_followers)
 
     def test_author_cant_follow_yourself(self):
         """Проверка, что автор не может подписаться
         на самого себя."""
+        count_followers = Follow.objects.count()
         self.author_client.get(
             reverse('posts:profile_follow',
                     kwargs={'username': self.author.username}))
         response = self.author_client.get(reverse('posts:follow_index'))
         self.assertEqual(len(response.context['page_obj']), 0)
+        self.assertEqual(Follow.objects.count(), count_followers)
+
+
+class TestViewComment(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.author = User.objects.create_user(username='NewAuthor')
+        cls.group = Group.objects.create(
+            title='Тестовая группа',
+            slug='test-slug',
+            description='Тестовое описание'
+        )
+        cls.post = Post.objects.create(
+            text='Тестовый текст',
+            author=cls.author,
+            group=cls.group,
+        )
+
+    def setUp(self):
+        self.user = User.objects.create_user(username='TestUser')
+        self.authorized_client = Client()
+        self.authorized_client.force_login(self.user)
+
+    def test_anonymous_client_cant_add_comment(self):
+        """Проверка, что неавторизованному пользователю недоступно
+        комментирование записей."""
+        response = self.client.get(reverse('posts:post_detail',
+                                   args=(self.post.id,)))
+        self.assertFalse(response.context['comments'])
+
+    def test_authorized_client_can_add_comments(self):
+        """Проверка, что авторизованный пользователь может оставлять
+        комментарии к записям."""
+        comment_count = Comment.objects.count()
+        form_data = {'text': 'Тестовый комментарий'}
+        self.authorized_client.post(
+            reverse('posts:add_comment', args=(self.post.id,)),
+            data=form_data,
+            follow=True,
+        )
+        self.assertEqual(Comment.objects.count(), comment_count + 1)
+        response = self.authorized_client.get(reverse('posts:post_detail',
+                                              args=(self.post.id,)))
+        self.assertEqual(
+            response.context['comments'][0].text, form_data['text'])

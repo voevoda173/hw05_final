@@ -14,25 +14,23 @@
           {% include 'includes/error_control.html' %}
           <form method="post"
             {% if action_url %}
-              action="{% url action_url %}"
+              action="{% url 'users:login' %}"
             {% endif %}>
-          {% csrf_token %}
-
-          {% for field in form %}
-          {% include 'includes/form_fields.html' %}
-          {% endfor %}
-          </div>
-          <div class="col-md-6 offset-md-4">
-            <button type="submit" class="btn btn-primary">
-              Войти
-            </button>
-            <a href="{% url 'users:password_reset_form' %}" class="btn btn-link">
-              Забыли пароль?
-            </a>
-          </div>
+            {% csrf_token %}
+            {% for field in form %}
+            {% include 'includes/form_fields.html' %}
+            {% endfor %}
+            <div class="col-md-6 offset-md-4">
+              <button type="submit" class="btn btn-primary">
+                Войти
+              </button>
+              <a href="{% url 'users:password_reset_form' %}" class="btn btn-link">
+                Забыли пароль?
+              </a>
+            </div> <!--class="col-md-6 offset-md-4"-->
           </form>
-        </div> <!-- card body -->
-      </div> <!-- card -->
-    </div> <!-- col -->
-</div> <!-- row -->
+        </div> <!--card body-->
+      </div> <!--card-->
+    </div> <!--col-->
+</div> <!--row -->
 {% endblock %}
