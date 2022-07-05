@@ -22,7 +22,7 @@ class PostFormTests(TestCase):
         cls.group = Group.objects.create(
             title='Тестовая группы',
             slug='test-slug',
-            description='Тестовое описание'
+            description='Тестовое описание',
         )
         cls.image = (
             b'\x47\x49\x46\x38\x39\x61\x02\x00'
@@ -35,7 +35,7 @@ class PostFormTests(TestCase):
         cls.uploaded = SimpleUploadedFile(
             name='image.jpg',
             content=cls.image,
-            content_type='image/jpg'
+            content_type='image/jpg',
         )
         cls.post = Post.objects.create(
             text='Тестовый текст',
@@ -72,7 +72,7 @@ class PostFormTests(TestCase):
         uploaded = SimpleUploadedFile(
             name='image_for_create.jpg',
             content=image,
-            content_type='image/jpg'
+            content_type='image/jpg',
         )
         post_count = Post.objects.count()
         form_data = {
@@ -87,24 +87,15 @@ class PostFormTests(TestCase):
         )
         cache.clear()
         self.assertEqual(Post.objects.count(), post_count + 1)
-        first_object = self.authorized_client.get(reverse('posts:index'))
-        self.assertEqual(
-            first_object.context['page_obj'][0].text, form_data['text'])
-        self.assertEqual(
-            first_object.context['page_obj'][0].group.slug, self.group.slug)
-        self.assertEqual(
-            first_object.context['page_obj'][0].author.id, self.user.id)
-        self.assertEqual(
-            first_object.context['page_obj'][0].image.name,
-            f'posts/{uploaded.name}')
-        self.assertTrue(
-            Post.objects.filter(
-                text=form_data['text'],
-                author=self.user,
-            ).exists())
+        created_post = Post.objects.first()
+        self.assertEqual(created_post.text, form_data['text'])
+        self.assertEqual(created_post.group.slug, self.group.slug)
+        self.assertEqual(created_post.author.id, self.user.id)
+        self.assertEqual(created_post.image.name, f'posts/{uploaded.name}')
 
     def test_author_user_edit_post(self):
         """Проверка изменения поста при его редактировании автором."""
+        posts_count = Post.objects.count()
         form_data = {
             'text': 'Отредактированный пост',
             'author': self.author,
@@ -117,6 +108,7 @@ class PostFormTests(TestCase):
         self.assertEqual(
             Post.objects.get(pk=self.post.id).text, form_data['text']
         )
+        self.assertEqual(Post.objects.count(), posts_count)
 
     def test_add_comment_auth(self):
         """Проверка добавления комментария авторизованным пользователем,
@@ -132,18 +124,7 @@ class PostFormTests(TestCase):
             follow=True,
         )
         self.assertEqual(Comment.objects.count(), comment_count + 1)
-        object_detail = self.authorized_client.get(
-            reverse('posts:post_detail', args=(self.post.id,)))
-        self.assertEqual(
-            object_detail.context['comments'][0].text, comment)
-        self.assertEqual(
-            object_detail.context['comments'][0].post.id, self.post.id)
-        self.assertEqual(
-            object_detail.context['comments'][0].author.id, self.user.id)
-        self.assertTrue(
-            Comment.objects.filter(
-                post=self.post,
-                text=form_data['text'],
-                author=self.user,
-            ).exists()
-        )
+        comment_object = Comment.objects.latest('created')
+        self.assertEqual(comment_object.text, comment)
+        self.assertEqual(comment_object.post.id, self.post.id)
+        self.assertEqual(comment_object.author.id, self.user.id)

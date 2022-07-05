@@ -4,7 +4,11 @@
 {% endblock %}
 {% block content %}
 <div class="container py-5">
-  <div class="mb-5">      
+  <div class="mb-5">    
+    <h3>
+      {{ author.get_full_name }}
+    </h3>
+  {% include 'posts/includes/author_card.html'%}
   {% if user != author %}
     {% if following %}
       <a

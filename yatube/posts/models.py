@@ -106,7 +106,7 @@ class Comment(models.Model):
     )
     text = models.TextField(
         verbose_name='Текст комментария',
-        help_text='Что вы об этом думаете?'
+        help_text='Что вы об этом думаете?',
     )
     created = models.DateTimeField(
         verbose_name='Дата комментария',

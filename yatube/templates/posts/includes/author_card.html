@@ -1,12 +1,12 @@
-<h4>
-  Все посты пользователя: {{ post.author.get_full_name }}
-</h4>
-<h4>
-  Всего постов: {{ post.author.posts.count }}
-</h4>  
-<h4>
-  Подписчиков: {{ post.author.following.count }}
-</h4>
-<h4>
-  Подписан: {{ post.author.follower.count }}
-</h4>
+<ul list-style-type: none;>
+  <li class="list-item" list-style-type: none>
+    Всего постов: {{ author.posts.count }}
+  </li>  
+  <li class="list-item">
+    Подписчиков: {{ author.following.count }}
+  </li>
+  <li class="list-item">
+    Подписан: {{ author.follower.count }}
+  </li>
+  <hr>
+</ul>

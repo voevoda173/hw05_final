@@ -1,4 +1,3 @@
-
 import shutil
 import tempfile
 
@@ -21,6 +20,7 @@ class PostPagesTest(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.user_author = User.objects.create_user(username='TestAuthor')
+        cls.user = User.objects.create_user(username='HasNoName')
         cls.group = Group.objects.create(
             title='Тестовый заголовок',
             slug='test-slug',
@@ -37,9 +37,8 @@ class PostPagesTest(TestCase):
         cls.uploaded = SimpleUploadedFile(
             name='image.jpg',
             content=cls.image,
-            content_type='image/jpg'
+            content_type='image/jpg',
         )
-
         cls.posts = [
             Post(
                 text=f'Тестовый текст {i}',
@@ -52,6 +51,11 @@ class PostPagesTest(TestCase):
         Post.objects.bulk_create(cls.posts)
         cls.posts = Post.objects.select_related('author', 'group')
         cache.clear()
+        cls.comment = Comment.objects.create(
+            post=cls.posts[0],
+            author=cls.user,
+            text='Тестовый комментарий',
+        )
 
     @classmethod
     def tearDownClass(cls):
@@ -59,7 +63,6 @@ class PostPagesTest(TestCase):
         shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
-        self.user = User.objects.create_user(username='HasNoName')
         self.authorized_client = Client()
         self.authorized_client.force_login(self.user)
         self.author_client = Client()
@@ -113,16 +116,25 @@ class PostPagesTest(TestCase):
         self.assertEqual(response.context['group'], self.group)
         self.check_pages_show_correct_context(response)
 
-    def test_profile_show_correct_context(self):
-        """Шаблон profile сформирован с правильным контекстом."""
-        response = (self.author_client.get(reverse('posts:profile',
+    def test_profile_show_correct_context_without_follower(self):
+        """Шаблон profile сформирован с правильным контекстом
+        при отсутсвии подписчиков."""
+        response = (self.authorized_client.get(reverse('posts:profile',
                     kwargs={'username': self.user_author.username})))
         self.assertEqual(response.context['author'], self.user_author)
+        self.assertTrue(isinstance(response.context.get('following'), bool))
         self.assertFalse(response.context['following'])
+        self.check_pages_show_correct_context(response)
+
+    def test_profile_show_correct_context_with_follower(self):
+        """Шаблон profile сформирован с правильным контекстом
+        при наличии подписчиков."""
         self.authorized_client.get(reverse('posts:profile_follow',
                                    args=(self.user_author.username,)))
         response = (self.authorized_client.get(reverse('posts:profile',
                     kwargs={'username': self.user_author.username})))
+        self.assertEqual(response.context['author'], self.user_author)
+        self.assertTrue(isinstance(response.context.get('following'), bool))
         self.assertTrue(response.context['following'])
         self.check_pages_show_correct_context(response)
 
@@ -139,15 +151,8 @@ class PostPagesTest(TestCase):
         self.assertEqual(response.context['post'].text,
                          self.posts[0].text)
         self.assertTrue(response.context['form'])
-        comment = Comment.objects.create(
-            post=self.posts[0],
-            author=self.user,
-            text='Тестовый комментарий',
-        )
-        response_comment = self.authorized_client.get(
-            reverse('posts:post_detail', kwargs={'post_id': self.posts[0].id}))
         self.assertEqual(
-            response_comment.context['comments'][0].text, comment.text)
+            response.context['comments'][0].text, self.comment.text)
 
     def test_create_post_show_correct_context(self):
         """Шаблон create_post сформирован с правильным контекстом."""
@@ -176,6 +181,8 @@ class PostPagesTest(TestCase):
             with self.subTest(value=value):
                 form_field = response.context.get('form').fields.get(value)
                 self.assertIsInstance(form_field, expected)
+        self.assertTrue(response.context.get('is_edit'), True)
+        self.assertTrue(isinstance(response.context.get('is_edit'), bool))
 
     def test_check_post_on_create(self):
         """Проверка, что пост правильно добавляется на страницы."""
@@ -183,7 +190,7 @@ class PostPagesTest(TestCase):
             text='Тестовый текст',
             author=self.user_author,
             group=self.group,
-            image=self.uploaded
+            image=self.uploaded,
         )
         pages = [
             reverse('posts:index'),
@@ -274,7 +281,7 @@ class TestViewCache(TestCase):
     def test_index_page_cache(self):
         """"Проверка кэша страницы index."""
         first_response = self.client.get(reverse('posts:index'))
-        Post.objects.get(pk=self.post.id).delete()
+        Post.objects.filter(pk=self.post.id).delete()
         second_response = self.client.get(reverse('posts:index'))
         self.assertEqual(first_response.content, second_response.content)
         cache.clear()
@@ -286,7 +293,8 @@ class TestViewFollow(TestCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
-        cls.author = User.objects.create_user(username='NewAuthor')
+        cls.author = User.objects.create_user(username='Author')
+        cls.new_author = User.objects.create_user(username='NewAuthor')
 
     def setUp(self):
         self.follower = User.objects.create_user(username='Follower')
@@ -298,39 +306,56 @@ class TestViewFollow(TestCase):
         self.author_client = Client()
         self.author_client.force_login(self.author)
 
-    def test_follow_index_page(self):
-        """Проверка, что авторизованный пользователь может подписаться
-        на автора и в его ленте отображаются посты автора,
-        на которого он подписан."""
+    def test_authorized_user_can_follow(self):
+        """Проверка, что авторизованный пользователь может
+        подписаться на автора."""
+        count_followers = Follow.objects.count()
         self.follower_client.get(
             reverse('posts:profile_follow',
                     kwargs={'username': self.author.username}))
+        self.assertEqual(Follow.objects.count(), count_followers + 1)
+        Follow.objects.all().delete
+
+    def test_follow_index_page(self):
+        """Проверка, что в ленте подписчика отображаются посты автора,
+        на которого он подписан."""
         post = Post.objects.create(
             text='Тест для подписки',
             author=self.author,
         )
+        self.follower_client.get(
+            reverse('posts:profile_follow',
+                    kwargs={'username': self.author.username}))
         response = self.follower_client.get(reverse('posts:follow_index'))
         self.assertEqual(response.context['page_obj'][0].id, post.id)
         self.assertEqual(response.context['page_obj'][0].text, post.text)
         self.assertEqual(response.context['page_obj'][0].group, post.group)
 
     def test_follower_can_unfollow(self):
-        """проверка, что подписчик может отписаться
+        """Проверка, что подписчик может отписаться
         от автора."""
-        Post.objects.create(
-            text='Тест для подписки',
-            author=self.author,
+        Follow.objects.create(
+            user=self.follower.username,
+            author=self.author.username,
         )
+        count_followers = Follow.objects.count()
+        self.follower_client.get(
+            reverse('posts:profile_unfollow',
+                    kwargs={'username': self.author.username}))
+        self.assertEqual(Follow.objects.count(), count_followers - 1)
+
+    def test_follower_can_unfollow(self):
+        """Проверка, что в ленте пользователя не отображаются посты
+        автора, на которого он не подписан."""
+        Post.objects.bulk_create([
+            Post(text='Тест для подписки', author=self.author),
+            Post(text='Тест для подписки 2', author=self.new_author),
+        ])
         self.follower_client.get(
             reverse('posts:profile_follow',
                     kwargs={'username': self.author.username}))
         response = self.follower_client.get(reverse('posts:follow_index'))
         self.assertEqual(len(response.context['page_obj']), 1)
-        self.follower_client.get(
-            reverse('posts:profile_unfollow',
-                    kwargs={'username': self.author.username}))
-        response = self.follower_client.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response.context['page_obj']), 0)
 
     def test_anonymous_client_cant_follow(self):
         """Проверка, что неавторизованный пользователь
@@ -361,7 +386,7 @@ class TestViewComment(TestCase):
         cls.group = Group.objects.create(
             title='Тестовая группа',
             slug='test-slug',
-            description='Тестовое описание'
+            description='Тестовое описание',
         )
         cls.post = Post.objects.create(
             text='Тестовый текст',
@@ -377,15 +402,24 @@ class TestViewComment(TestCase):
     def test_anonymous_client_cant_add_comment(self):
         """Проверка, что неавторизованному пользователю недоступно
         комментирование записей."""
-        response = self.client.get(reverse('posts:post_detail',
-                                   args=(self.post.id,)))
-        self.assertFalse(response.context['comments'])
+        comment_count = Comment.objects.count()
+        form_data = {
+            'text': 'Тестовый комментарий',
+        }
+        self.client.post(
+            reverse('posts:post_detail', args=(self.post.id,)),
+            data=form_data,
+            follow=True,
+        )
+        self.assertEqual(Comment.objects.count(), comment_count)
 
     def test_authorized_client_can_add_comments(self):
         """Проверка, что авторизованный пользователь может оставлять
         комментарии к записям."""
         comment_count = Comment.objects.count()
-        form_data = {'text': 'Тестовый комментарий'}
+        form_data = {
+            'text': 'Тестовый комментарий',
+        }
         self.authorized_client.post(
             reverse('posts:add_comment', args=(self.post.id,)),
             data=form_data,

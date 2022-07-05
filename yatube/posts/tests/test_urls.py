@@ -111,7 +111,7 @@ class PostURLTests(TestCase):
         """Проверка, что авторизованный пользователь может
         подписываться на других пользователей."""
         self.authorized_client.get(
-            f'/profile/{self.user_author.username}/follow/'
+            f'/profile/{self.user_author.username}/follow/',
         )
         self.assertTrue(
             Follow.objects.filter(user=self.user,

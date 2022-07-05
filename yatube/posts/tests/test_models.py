@@ -56,7 +56,7 @@ class PostModelTest(TestCase):
             'pub_date': 'Когда высказана мысль',
             'author': 'Ну и кто же это придумал?',
             'group': 'В каком сообществе опубликовать?',
-            'image': 'Здесь можно прикрепить картинку.'
+            'image': 'Здесь можно прикрепить картинку.',
         }
         for field, expected_value in help_text_fields.items():
             with self.subTest(field=field):

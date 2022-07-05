@@ -10,7 +10,7 @@
     <p>
       {{ group.description|linebreaksbr }}
     </p>
-    {%for post in page_obj %}
+    {% for post in page_obj %}
     {% include 'posts/includes/post.html' %}
     {% if not forloop.last %} 
       <hr>
