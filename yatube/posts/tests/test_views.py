@@ -314,7 +314,6 @@ class TestViewFollow(TestCase):
             reverse('posts:profile_follow',
                     kwargs={'username': self.author.username}))
         self.assertEqual(Follow.objects.count(), count_followers + 1)
-        Follow.objects.all().delete
 
     def test_follow_index_page(self):
         """Проверка, что в ленте подписчика отображаются посты автора,
@@ -412,21 +411,3 @@ class TestViewComment(TestCase):
             follow=True,
         )
         self.assertEqual(Comment.objects.count(), comment_count)
-
-    def test_authorized_client_can_add_comments(self):
-        """Проверка, что авторизованный пользователь может оставлять
-        комментарии к записям."""
-        comment_count = Comment.objects.count()
-        form_data = {
-            'text': 'Тестовый комментарий',
-        }
-        self.authorized_client.post(
-            reverse('posts:add_comment', args=(self.post.id,)),
-            data=form_data,
-            follow=True,
-        )
-        self.assertEqual(Comment.objects.count(), comment_count + 1)
-        response = self.authorized_client.get(reverse('posts:post_detail',
-                                              args=(self.post.id,)))
-        self.assertEqual(
-            response.context['comments'][0].text, form_data['text'])

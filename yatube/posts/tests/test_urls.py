@@ -2,7 +2,7 @@ from http import HTTPStatus
 
 from django.test import Client, TestCase
 
-from ..models import Follow, Group, Post, User
+from ..models import Group, Post, User
 
 
 class PostURLTests(TestCase):
@@ -106,25 +106,3 @@ class PostURLTests(TestCase):
             with self.subTest(address=address):
                 response = self.post_author.get(address)
                 self.assertTemplateUsed(response, template)
-
-    def test_url_follow_exist_and_desired_auth(self):
-        """Проверка, что авторизованный пользователь может
-        подписываться на других пользователей."""
-        self.authorized_client.get(
-            f'/profile/{self.user_author.username}/follow/',
-        )
-        self.assertTrue(
-            Follow.objects.filter(user=self.user,
-                                  author=self.user_author)
-        )
-
-    def test_url_unfollow_exist_and_desired_auth(self):
-        """Проверка, что авторизованный пользователь может
-        отписываться от других пользователей."""
-        self.authorized_client.get(
-            f'/profile/{self.post.author.username}/unfollow/'
-        )
-        self.assertFalse(
-            Follow.objects.filter(user=self.user,
-                                  author=self.user_author).exists()
-        )
