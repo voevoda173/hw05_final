@@ -39,7 +39,7 @@
           </a>
         </li>
         <li>
-          Пользователь: {{ user.username }}
+          Пользователь: {{ user.get_full_name }}
         </li>
         {% else %}
         <li class="nav-item"> 
